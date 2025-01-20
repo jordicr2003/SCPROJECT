@@ -1,28 +1,48 @@
 import iperf3
 import matplotlib.pyplot as plt
 import os
+import subprocess
 
+def kill_processes_on_port(port):
+    """
+    Elimina todos los procesos que utilizan el puerto especificado.
+    
+    :param port: Número de puerto a liberar.
+    """
+    try:
+        # Encuentra el PID del proceso que usa el puerto
+        result = subprocess.check_output(f"sudo lsof -t -i:{port}", shell=True, text=True)
+        pids = result.strip().split("\n")  # Lista de PIDs
+        
+        for pid in pids:
+            print(f"Eliminando proceso con PID: {pid} en el puerto {port}.")
+            os.system(f"sudo kill -9 {pid}")
+        print(f"Todos los procesos en el puerto {port} han sido eliminados.")
+    except subprocess.CalledProcessError:
+        print(f"No se encontraron procesos en el puerto {port}.")
 def run_iperf3_server():
     """
     Configura y ejecuta un servidor iperf3 en modo bloqueante.
     """
+    kill_processes_on_port(5201)
     server = iperf3.Server()
 
-    server.bind_address = '192.168.1.72'  
-    server.port = 5201                   
+    server.bind_address = '192.168.2.1'  
+    server.port = 5201   
 
     print(f"Servidor iperf3 iniciado en {server.bind_address}:{server.port}. Esperando conexiones...")
 
     try:
         while True:
+           
             result = server.run() 
 
             if result.error:
                 print(f"Error en el servidor: {result.error}")
             else:
-                
+                result_json = result.json
                 client_ip=result.remote_host
-                intervals = result.intervals
+                intervals = result_json["intervals"]
                 times = [interval['sum']['start'] for interval in intervals]
                 client_folder = f"reports/{client_ip}"
                 os.makedirs(client_folder, exist_ok=True)
@@ -56,6 +76,7 @@ def run_iperf3_server():
 
 
                 #Graphic 3
+                
                 plt.figure(figsize=(10, 5))
                 plt.plot(times, delays, marker='o', label='Jitter (ms)')
                 plt.xlabel('Time (s)')
@@ -65,6 +86,7 @@ def run_iperf3_server():
                 plt.grid(True)
                 plt.savefig(f"{client_folder}/delay.png") 
                 plt.close()
+            kill_processes_on_port(5201)
 
     except KeyboardInterrupt:
         print("\nServer stopped.")
@@ -73,3 +95,4 @@ def run_iperf3_server():
 
 if __name__ == "__main__":
     run_iperf3_server()
+
